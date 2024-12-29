@@ -8,20 +8,48 @@
         body {
             font-family: sans-serif;
             margin: 20px;
-            display: flex; /* フッターを最下部に固定するためのflexbox */
-            flex-direction: column; /* 縦方向に要素を並べる */
-            min-height: 100vh; /* 最小の高さをビューポートの高さに合わせる */
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            align-items: center; /* ページ中央寄せのために追加 */
         }
         h1, h2 { border-bottom: 1px solid #eee; padding-bottom: 5px; }
-        #file-list { margin-bottom: 20px; }
-        #file-list ul { list-style: none; padding: 0; }
+        /* ファイル一覧のスタイル調整 */
+        #file-list {
+            margin-bottom: 20px;
+            max-height: 300px; /* 高さ制限を追加 */
+            overflow-y: auto; /* スクロールバーを追加 */
+            width: 80%; /* 幅を調整 */
+           /* 中央寄せのために追加 */
+            display: flex;
+            justify-content: center;
+             margin-left: auto;
+             margin-right: auto;
+        }
+          #file-list ul { 
+              list-style: none; 
+               padding: 0;
+               width: 100%; /* 幅を調整 */
+           }
         #file-list li { cursor: pointer; padding: 5px; border-bottom: 1px solid #f0f0f0; }
         #file-list li:hover { background-color: #f0f0f0; }
+        /* ファイル一覧の背景色を交互にするスタイル */
+         #file-list ul li:nth-child(odd) {
+            background-color: #f9f9f9; /* 奇数行の背景色 */
+        }
+       #file-list ul li:nth-child(even) {
+            background-color: #ffffff; /* 偶数行の背景色 */
+        }
         #tanka-list-container {
             max-height: 600px;
             overflow-y: auto;
             margin-bottom: 20px;
-            width: 95%; /* 幅を少し狭く調整 */
+           width: 95%;
+           display: flex;
+            justify-content: center;
+             margin-left: auto;
+             margin-right: auto;
+           
         }
         #tanka-list table { width: 100%; border-collapse: collapse; }
         #tanka-list th, #tanka-list td { border: 1px solid #ddd; padding: 8px; text-align: left; }
@@ -33,15 +61,23 @@
         }
         .ai-summary-container { border: 1px solid #ddd; padding: 10px; margin-top: 10px; white-space: pre-wrap; word-wrap: break-word;}
         .hidden { display: none; }
-        #search-container {
+         #search-container {
             margin-bottom: 10px;
+            width: 80%;/* 検索フォームの幅を調整 */
+            display: flex;
+            justify-content: center;
+            margin-left: auto;
+             margin-right: auto;
         }
-         /* 追加: ボタンを中央寄せにするスタイル */
+        #search-input {
+            width: 100%; /* 入力欄の幅を拡張 */
+           padding: 5px;
+            box-sizing: border-box;
+        }
         #tanka-list td button.show-ai-summary {
             display: block;
-            margin: 0 auto; /* 中央寄せ */
+            margin: 0 auto;
         }
-        /* 追加: 列の幅調整 */
         #tanka-list th:nth-child(1),
         #tanka-list td:nth-child(1),
          #tanka-list th:nth-child(2),
@@ -50,18 +86,18 @@
         }
         #tanka-list th:not(:nth-child(1)):not(:nth-child(2)),
         #tanka-list td:not(:nth-child(1)):not(:nth-child(2)){
-            width: 100px; /* 列幅を固定 */
+            width: 100px;
         }
-       /* 追加: テーブルの行の背景色を交互にするスタイル */
+       /* テーブルの行の背景色を交互にするスタイル */
         #tanka-list tbody tr:nth-child(odd) {
-            background-color: #f9f9f9; /* 奇数行の背景色 */
+            background-color: #f9f9f9;
         }
        #tanka-list tbody tr:nth-child(even) {
-            background-color: #ffffff; /* 偶数行の背景色 */
+            background-color: #ffffff;
         }
         /* フッタースタイル */
         footer {
-            margin-top: auto; /* フッターを最下部に配置 */
+            margin-top: auto;
             text-align: center;
             padding: 10px;
             border-top: 1px solid #eee;
@@ -95,9 +131,10 @@
   <div id="file-list">
   </div>
 
-    <!-- 追加: 検索窓 -->
+    <!-- 検索窓 -->
   <h2 id="tanka-list-header" class="hidden">投稿短歌一覧</h2>
   <div id="search-container" class="hidden">
+        <!-- 検索フォームの幅を拡張するために、input要素をdivで囲んでいます -->
         <input type="text" id="search-input" placeholder="投稿歌・作者名等で絞り込み">
   </div>
 
@@ -142,6 +179,8 @@
 
       fetchCsvFileList()
           .then(fileList => {
+            // ファイル名を降順でソートする
+             fileList.sort((a, b) => b.localeCompare(a, 'ja'));//日本語対応の辞書順でソート
               const fileListDiv = document.getElementById('file-list');
               let fileListHTML = '<ul>';
               
@@ -164,7 +203,9 @@
                   fileList.forEach(filePath => {
                       // ファイル名をデコードして表示
                        const decodedFileName = decodeURIComponent(filePath);
-                      fileListHTML += `<li data-file="${filePath}">${decodedFileName}</li>`;
+                       // ファイル名から末尾の .csv を削除
+                       const fileNameWithoutExtension = decodedFileName.replace(/\.csv$/i, ''); // 末尾の.csvを削除(大文字小文字を区別しない)
+                      fileListHTML += `<li data-file="${filePath}">${fileNameWithoutExtension}</li>`;// 表示するファイル名から拡張子を削除
                   });
                   fileListHTML += '</ul>';
                   fileListDiv.innerHTML = fileListHTML;
