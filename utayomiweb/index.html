@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI評閲覧-beta</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            display: flex; /* フッターを最下部に固定するためのflexbox */
+            flex-direction: column; /* 縦方向に要素を並べる */
+            min-height: 100vh; /* 最小の高さをビューポートの高さに合わせる */
+        }
+        h1, h2 { border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        #file-list { margin-bottom: 20px; }
+        #file-list ul { list-style: none; padding: 0; }
+        #file-list li { cursor: pointer; padding: 5px; border-bottom: 1px solid #f0f0f0; }
+        #file-list li:hover { background-color: #f0f0f0; }
+        #tanka-list-container {
+            max-height: 600px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            width: 95%; /* 幅を少し狭く調整 */
+        }
+        #tanka-list table { width: 100%; border-collapse: collapse; }
+        #tanka-list th, #tanka-list td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+         #tanka-list thead th {
+            background-color: #f5f5f5;
+            position: sticky;
+            top: 0;
+             z-index: 1;
+        }
+        .ai-summary-container { border: 1px solid #ddd; padding: 10px; margin-top: 10px; white-space: pre-wrap; word-wrap: break-word;}
+        .hidden { display: none; }
+        #search-container {
+            margin-bottom: 10px;
+        }
+         /* 追加: ボタンを中央寄せにするスタイル */
+        #tanka-list td button.show-ai-summary {
+            display: block;
+            margin: 0 auto; /* 中央寄せ */
+        }
+        /* 追加: 列の幅調整 */
+        #tanka-list th:nth-child(1),
+        #tanka-list td:nth-child(1),
+         #tanka-list th:nth-child(2),
+        #tanka-list td:nth-child(2){
+           width: auto;
+        }
+        #tanka-list th:not(:nth-child(1)):not(:nth-child(2)),
+        #tanka-list td:not(:nth-child(1)):not(:nth-child(2)){
+            width: 100px; /* 列幅を固定 */
+        }
+       /* 追加: テーブルの行の背景色を交互にするスタイル */
+        #tanka-list tbody tr:nth-child(odd) {
+            background-color: #f9f9f9; /* 奇数行の背景色 */
+        }
+       #tanka-list tbody tr:nth-child(even) {
+            background-color: #ffffff; /* 偶数行の背景色 */
+        }
+        /* フッタースタイル */
+        footer {
+            margin-top: auto; /* フッターを最下部に配置 */
+            text-align: center;
+            padding: 10px;
+            border-top: 1px solid #eee;
+             margin-bottom: 10px;
+        }
+        footer a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+  <h1>AI評閲覧システム</h1>
+
+  <p>
+      このWebページでは、投稿された短歌についてAIが生成したコメントを閲覧可能です。<br><br>
+      以下の手順で操作してください。
+  </p>
+  <ol>
+    <li>ファイル一覧から、表示したい投稿企画のファイル名を選択してください。</li>
+    <li>選択したファイルの短歌一覧が表示されます。</li>
+    <li>検索フォームに投稿短歌や作者名、単語などを入力すると一覧を絞り込むことが可能です。</li>
+    <li>短歌の右側にある「表示」ボタンをクリックすると、AIによる評価が表示されます。</li>
+  </ol>
+
+  <h2>投稿企画一覧</h2>
+  <div id="file-list">
+  </div>
+
+    <!-- 追加: 検索窓 -->
+  <h2 id="tanka-list-header" class="hidden">投稿短歌一覧</h2>
+  <div id="search-container" class="hidden">
+        <input type="text" id="search-input" placeholder="投稿歌・作者名等で絞り込み">
+  </div>
+
+    <div id="tanka-list-container" class="hidden">
+      <div id="tanka-list" ></div>
+  </div>
+
+
+  <h2 id="ai-summary-header" class="hidden">AI評</h2>
+  <div id="ai-summary" class="hidden">
+  </div>
+
+    <!-- フッターの追加 -->
+    <footer>
+        <p>
+            制作: ef<br>
+            GitHub: <a href="https://github.com/ef-utakata" target="_blank">https://github.com/ef-utakata</a><br>
+            Twitter: <a href="https://x.com/ef_utakata" target="_blank">https://x.com/ef_utakata</a>
+        </p>
+    </footer>
+
+  <script>
+    // dataディレクトリ内のCSVファイルを一覧する関数
+    function fetchCsvFileList() {
+        return fetch('data/')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.text();
+            })
+            .then(html => {
+               const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                 const links = Array.from(doc.querySelectorAll('a'));
+                    // dataディレクトリ内のcsvファイルの一覧を取得する
+                const csvFiles = links.map(link => link.href.split('/').pop()).filter(file => file.toLowerCase().endsWith('.csv') && !file.startsWith('.'));
+                return csvFiles;
+            });
+    }
+
+
+      fetchCsvFileList()
+          .then(fileList => {
+              const fileListDiv = document.getElementById('file-list');
+              let fileListHTML = '<ul>';
+              
+              const csvDataCache = {};
+              let csvPromises = fileList.map(filePath => {
+                  return fetch(`data/${filePath}`)
+                  .then(response => {
+                      if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                      return response.text();
+                  })
+                  .then(csvText => {
+                    csvDataCache[filePath] = csvText;
+                  });
+              });
+              
+              Promise.all(csvPromises)
+              .then(() => {
+                  fileList.forEach(filePath => {
+                      // ファイル名をデコードして表示
+                       const decodedFileName = decodeURIComponent(filePath);
+                      fileListHTML += `<li data-file="${filePath}">${decodedFileName}</li>`;
+                  });
+                  fileListHTML += '</ul>';
+                  fileListDiv.innerHTML = fileListHTML;
+                  
+                  fileListDiv.querySelectorAll('li').forEach(item => {
+                      item.addEventListener('click', function() {
+                          const selectedFile = this.getAttribute('data-file');
+                          displayTankaList(selectedFile, csvDataCache[selectedFile]);
+                      });
+                  });
+              })
+              .catch(error => {
+                console.error("ファイル読み込みエラー:", error);
+                fileListDiv.innerHTML = "<p>ファイルの読み込みに失敗しました。</p>";
+            });
+          });
+
+          function displayTankaList(filePath, csvText) {
+          const tankaListDiv = document.getElementById('tanka-list');
+          const tankaListHeader = document.getElementById('tanka-list-header');
+          const searchContainer = document.getElementById('search-container');
+          tankaListHeader.classList.remove('hidden');
+          searchContainer.classList.remove('hidden');
+           const tankaListContainer = document.getElementById('tanka-list-container');
+            tankaListContainer.classList.remove('hidden');
+
+          
+          const parseCSV = (csvText) => {
+              const lines = [];
+              let currentLine = '';
+              let inQuote = false;
+              const tempNewlinePlaceholder = 'TEMP_NEWLINE_PLACEHOLDER'; // 一時的な改行コード
+
+              for (let char of csvText) {
+                    if (char === '"') {
+                        inQuote = !inQuote;
+                    }
+                   
+                    if (char === '\n' && !inQuote) {
+                         lines.push(currentLine);
+                         currentLine = '';
+                    } else {
+                        currentLine += char;
+                    }
+              }
+                lines.push(currentLine); // 最後の行を追加
+          
+              
+                const headers = lines[0].split(',').map(header => header.trim().replace(/^"|"$/g, ''));
+                const data = [];
+
+              for (let i = 1; i < lines.length; i++) {
+                  // 分割前に一時的な改行コードを正規の改行コードに戻す
+                    let line = lines[i].replace(new RegExp(tempNewlinePlaceholder, 'g'), '\n');
+                    
+                    const values = [];
+                    let current = '';
+                    let inQuote = false;
+                    for(let char of line) {
+                        if (char === '"') {
+                            inQuote = !inQuote;
+                        } else if (char === ',' && !inQuote) {
+                            values.push(current.trim().replace(/^"|"$/g, ''));
+                            current = '';
+                        } else {
+                            current += char;
+                        }
+                    }
+                    values.push(current.trim().replace(/^"|"$/g, ''));
+                    data.push(values);
+                }
+                return {headers, data};
+            };
+        
+
+          const {headers, data} = parseCSV(csvText);
+           const contentIndex = headers.indexOf('Content');
+            const authorIndex = headers.indexOf('Author');
+
+             let tableHTML = '<table><thead><tr>';
+             // ヘッダーの表示を修正
+            tableHTML += `<th>作品</th><th>作者</th>`;
+            headers.forEach(header => {
+               if (header.startsWith('Utakai:')) {
+                tableHTML += `<th>${header}</th>`;
+                 } else if(header.startsWith('LLM:')){
+                     const headerText = header.replace(/^LLM:/, '');
+                     tableHTML += `<th>${headerText}</th>`;
+                 }
+            });
+            tableHTML += '</tr></thead><tbody>';
+
+
+          data.forEach((row, index) => {
+                const content = row[contentIndex] || '';
+                const author = row[authorIndex] || '';
+            tableHTML += `<tr data-row-text="${content} ${author}"><td>${content}</td><td>${author}</td>`;
+
+                headers.forEach((header, headerIndex) =>{
+                    if(header.startsWith('Utakai:') || header.startsWith('LLM:')){
+                       tableHTML += `<td><button class="show-ai-summary" data-row="${index}" data-header="${header}">表示</button></td>`
+                    }
+                });
+                tableHTML += '</tr>';
+          });
+            tableHTML += '</tbody></table>';
+
+            tankaListDiv.innerHTML = tableHTML;
+            
+          // 検索機能
+          const searchInput = document.getElementById('search-input');
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                const rows = tankaListDiv.querySelectorAll('tbody tr');
+
+              rows.forEach(row => {
+                const rowText = row.getAttribute('data-row-text').toLowerCase();
+                if (rowText.includes(searchTerm)) {
+                   row.style.display = '';
+                 } else {
+                    row.style.display = 'none';
+                 }
+                });
+             });
+           
+           document.querySelectorAll('.show-ai-summary').forEach(button => {
+              button.addEventListener('click', function() {
+                  const rowIndex = parseInt(this.getAttribute('data-row'));
+                  const header = this.getAttribute('data-header');
+                    //  LLM名を抽出
+                  let llmName = '';
+                    if(header.startsWith('LLM:')) {
+                        llmName = header.replace(/^LLM:/, ''); // LLM:を取り除く
+                    }
+                  displayAiSummary(data[rowIndex], header, headers, llmName); // LLM名を渡す
+              });
+            });
+      }
+
+        // displayAiSummary関数を修正
+        function displayAiSummary(rowData, selectedHeader, headers, llmName) {
+            const aiSummaryDiv = document.getElementById('ai-summary');
+            const aiSummaryHeader = document.getElementById('ai-summary-header');
+            aiSummaryHeader.classList.remove('hidden');
+            aiSummaryDiv.classList.remove('hidden');
+          
+             let aiSummaryHTML = "";
+            // LLM名を表示
+           if(llmName){
+               aiSummaryHTML += `<h2>${llmName}による評価</h2>`; // LLM名を表示
+           }
+
+            const headerIndex = headers.indexOf(selectedHeader);
+            if(headerIndex !== -1){
+              let content = rowData[headerIndex] ? rowData[headerIndex] : '';
+               // Markdownライクな記法をHTMLに変換
+                content = content.replace(/(\*\*|__)(.*?)\1/g, '<b>$2</b>') // 太字
+                                .replace(/(\*|_)(.*?)\1/g, '<i>$2</i>')   // 斜体
+                                .replace(/`([^`]*)`/g, '<code>$1</code>') // インラインコード
+                                .replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>') // コードブロック
+                                .replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1">') // 画像
+                                .replace(/^# (.*)$/gm, '<h1>$1</h1>') // h1
+                                .replace(/^## (.*)$/gm, '<h2>$1</h2>') // h2
+                                .replace(/^### (.*)$/gm, '<h3>$1</h3>') // h3
+                                .replace(/^#### (.*)$/gm, '<h4>$1</h4>') // h4
+                                .replace(/^##### (.*)$/gm, '<h5>$1</h5>') // h5
+                                .replace(/^###### (.*)$/gm, '<h6>$1</h6>') // h6
+                                .replace(/^> (.*)$/gm, '<blockquote>$1</blockquote>') // blockquote
+                                .replace(/^- (.*)$/gm, '<ul><li>$1</li></ul>') // リスト（簡易的な対応）
+                                .replace(/\n/g, '<br>'); // 改行を<br>に変換
+              aiSummaryHTML += `<div class="ai-summary-container">${content}</div>`;
+            }
+           
+            aiSummaryDiv.innerHTML = aiSummaryHTML;
+        }
+  </script>
+</body>
+</html>
